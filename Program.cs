@@ -1,10 +1,14 @@
-﻿namespace HttpServerScratch
+﻿using System.IO;
+
+namespace HttpServerScratch
 {
     internal class Program
     {
         static void Main(string[] args)
         {
-            Console.WriteLine("Hello, World!");
+
+            ServidorHttp Server = new ServidorHttp();
+            
         }
     }
 }
