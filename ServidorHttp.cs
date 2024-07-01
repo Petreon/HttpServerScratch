@@ -19,12 +19,17 @@ namespace HttpServerScratch
         private int QtdRequests { get; set; }
 
         private string HtmlExample { get; set; }
+        // Mime types supported from this server
+        private SortedList<string,string> MimeTypes { get; set; }
+        private SortedList<string,string> HostsDirectories { get; set; }
 
         public ServidorHttp(int porta = 8080) 
         { 
             this.port = porta;
             this.QtdRequests = 0;
             CreateHtmlExample();
+            PopulateMimeTypes();
+            PopulateHostDirectories();
 
             try
             {
@@ -74,22 +79,52 @@ namespace HttpServerScratch
                     string[] requisitionLines = RequisitionText.Split("\r\n"); //this is the break line
                     // have better ways to do this but using this case only for practicity
                     // GET /address.html http/1.1  <- message to be parsed
-                    int iFirstSpace             = requisitionLines[0].IndexOf(' ');
-                    int iSecondSpace            = requisitionLines[0].LastIndexOf(' ');
-                    string httpMethodRequested    = requisitionLines[0].Substring(0, iFirstSpace);
-                    string resourceRequested    = requisitionLines[0].Substring(iFirstSpace+1, iSecondSpace - iFirstSpace-1);
-                    string httpVersion          = requisitionLines[0].Substring(iSecondSpace + 1);
+                    int iFirstSpace                 = requisitionLines[0].IndexOf(' ');
+                    int iSecondSpace                = requisitionLines[0].LastIndexOf(' ');
+                    string httpMethodRequested      = requisitionLines[0].Substring(0, iFirstSpace);
+                    //get the filename to be requested
+                    string resourceRequested        = requisitionLines[0].Substring(iFirstSpace + 1, iSecondSpace - iFirstSpace - 1);
+                    if (resourceRequested == "/") resourceRequested = "/index.html";
+
+                    //geting the url parameters
+                    string parametersUrl = resourceRequested.Contains("?") ? resourceRequested.Split("?")[1] : "";
+                    SortedList<string,string> parameters = ParametersProcessing(parametersUrl);
+
+                    resourceRequested               = resourceRequested.Split("?")[0]; // thi is to handle inputs parameters in URL
+                    string httpVersion              = requisitionLines[0].Substring(iSecondSpace + 1);
 
                     //now getting the host
-                    iFirstSpace = requisitionLines[1].IndexOf(' ');
-                    string hostName = requisitionLines[1].Substring(iFirstSpace + 1);
+                    iFirstSpace                     = requisitionLines[1].IndexOf(' ');
+                    string hostName                 = requisitionLines[1].Substring(iFirstSpace + 1);
 
-                    byte[] bytesContent = ReadFile(resourceRequested);
-                    byte[] RequestGenerated = null;
+                    byte[] bytesContent             = null;
+                    byte[] RequestGenerated         = null;
+                    FileInfo fileRequested          = new FileInfo(GetFullPathFile(hostName,resourceRequested));
 
-                    if (bytesContent.Length > 0) {
-                        RequestGenerated = GenerateHeader(httpVersion, "text/html;charset=utf-8", "200", bytesContent.Length);
+                    if(fileRequested.Exists){
+                        //check if the file requested is supported by the server
+                        if (MimeTypes.ContainsKey(fileRequested.Extension.ToLower())) {
 
+                            if(fileRequested.Extension.ToLower() == ".dhtml")
+                            {
+                                bytesContent = GenerateDynamicHTML(fileRequested.FullName, parameters);
+
+                            }
+                            else
+                            {
+                                bytesContent = File.ReadAllBytes(fileRequested.FullName);
+                            }
+
+                            string mimeTypeResponse = MimeTypes[fileRequested.Extension.ToLower()];
+                            RequestGenerated = GenerateHeader(httpVersion, mimeTypeResponse, "200", bytesContent.Length);
+
+                        }
+                        else
+                        {
+                            bytesContent = Encoding.UTF8.GetBytes("<h1>ERROR 415 - MIME TYPE NOT SUPPORTED </h1>");
+                            RequestGenerated = GenerateHeader(httpVersion, "text/html;charset=utf-8", "415", bytesContent.Length);
+                        }
+                        
                     }
                     else
                     {
@@ -132,6 +167,7 @@ namespace HttpServerScratch
 
         private byte[] ReadFile(string resource)
         {
+            //this method is no used anymore
             string directorypath = "D:\\VisualStudioProjects\\HttpServerScratch\\www";
             string FilePath = directorypath + resource.Replace("/","\\");
             if (File.Exists(FilePath)) {
@@ -142,6 +178,91 @@ namespace HttpServerScratch
             else return new byte[0];
         }
 
+        private void PopulateMimeTypes()
+        {
+            this.MimeTypes = new SortedList<string, string>();
+            this.MimeTypes.Add(".html", "text/html;charset=utf-8");
+            this.MimeTypes.Add(".dhtml", "text/html;charset=utf-8");
+            this.MimeTypes.Add(".css", "text/css");
+            this.MimeTypes.Add(".js", "text/js");
+            this.MimeTypes.Add(".png", "image/png");
+            this.MimeTypes.Add(".jpg", "image/jpg");
+            this.MimeTypes.Add(".gif", "image/gif");
+            this.MimeTypes.Add(".svg", "image/svg+xml");
+            this.MimeTypes.Add(".ico", "image/ico");
+            this.MimeTypes.Add(".woff", "font/woff");
+            this.MimeTypes.Add(".woff2", "font/woff2");
+
+        }
+
+        private void PopulateHostDirectories()
+        {
+            this.HostsDirectories = new SortedList<string, string>();
+            this.HostsDirectories.Add("localhost", "D:\\VisualStudioProjects\\HttpServerScratch\\www\\localhost");
+            this.HostsDirectories.Add("maroquio.com", "D:\\VisualStudioProjects\\HttpServerScratch\\www\\maroquio.com");
+        }
+
+        private string GetFullPathFile(string host ,string file)
+        {
+            //get the first part of the host withour port
+            string directory = this.HostsDirectories[host.Split(":")[0]];
+            string fullPath = directory + file.Replace("/","\\");
+            return fullPath;
+        }
+
+        public byte[] GenerateDynamicHTML(string filePath, SortedList<string,string> parametersList)
+        {
+
+            string templateKey = "{{HtmlGenerated}}";
+            string htmlModel = File.ReadAllText(filePath);
+            StringBuilder newHtml = new StringBuilder();
+            /*
+            newHtml.Append("<ul>");
+
+            foreach (string type in this.MimeTypes.Keys)
+            {
+                newHtml.Append($"<li> Extension Files with: {type}</li>");
+            }
+           
+            newHtml.Append("</ul>");
+            */
+            if (parametersList.Count <= 0)
+            {
+                newHtml.Append("<p>No one Parameter has been pass</p>");
+
+            }
+            else
+            {
+                newHtml.Append("<ul>");
+
+                foreach (KeyValuePair<string, string> param in parametersList)
+                {
+                    newHtml.Append($"<li>{param.Key} = {param.Value}</li>");
+                }
+
+                newHtml.Append("</ul>");
+            }
+
+            string finalHtml = htmlModel.Replace(templateKey, newHtml.ToString());
+            
+            return Encoding.UTF8.GetBytes(finalHtml);
+        }
+
+        private SortedList<string,string> ParametersProcessing(string parametersUrl)
+        {
+            SortedList<string,string> parameters = new SortedList<string,string>();
+            //to parse
+            //v=_3_tDDpzS30&t=1200
+            if (!string.IsNullOrEmpty(parametersUrl))
+            {
+                string[] keyValuePairs = parametersUrl.Split("&");
+                foreach (string pair in keyValuePairs) {
+                    parameters.Add(pair.Split("=")[0].ToLower(), pair.Split("=")[1]); 
+                }
+            } 
+
+            return parameters;
+        }
 
     }
 }
