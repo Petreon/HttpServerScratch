@@ -11,6 +11,7 @@
 
 <body>
     <h1>Product List</h1>
+    <a href="cadastroproduto.dhtml">Cadastrar new Product</a>
     <hr>
     <table>
         <tr>

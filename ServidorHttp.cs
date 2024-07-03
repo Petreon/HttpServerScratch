@@ -5,6 +5,7 @@ using System.Text;
 using System.Threading.Tasks;
 using System.Net.Sockets;
 using System.Net;
+using System.Web;
 
 namespace HttpServerScratch
 {
@@ -90,6 +91,21 @@ namespace HttpServerScratch
                     string parametersUrl = resourceRequested.Contains("?") ? resourceRequested.Split("?")[1] : "";
                     SortedList<string,string> parameters = ParametersProcessing(parametersUrl);
 
+                    //if the server is send a form in post you get the form with "\r\n\r\n"
+                    string postData = RequisitionText.Contains("\r\n\r\n") ? RequisitionText.Split("\r\n\r\n")[1] : "";
+                    if (!string.IsNullOrEmpty(postData))
+                    {
+                        postData = HttpUtility.UrlDecode(postData);
+                        //the data send in post form is like the url Sending id=2&name=rice
+                        SortedList<string,string> postParameters = ParametersProcessing(postData);
+                        foreach (KeyValuePair<string,string> parameter in postParameters) 
+                        {
+                            //parameters[parameter.Key] = parameter.Value;
+                            parameters.Add(parameter.Key, parameter.Value);
+                        }
+                    }
+
+
                     resourceRequested               = resourceRequested.Split("?")[0]; // thi is to handle inputs parameters in URL
                     string httpVersion              = requisitionLines[0].Substring(iSecondSpace + 1);
 
@@ -107,7 +123,7 @@ namespace HttpServerScratch
 
                             if(fileRequested.Extension.ToLower() == ".dhtml")
                             {
-                                bytesContent = GenerateDynamicHTML(fileRequested.FullName, parameters);
+                                bytesContent = GenerateDynamicHTML(fileRequested.FullName, parameters, httpMethodRequested);
 
                             }
                             else
@@ -213,7 +229,7 @@ namespace HttpServerScratch
         public byte[] GenerateDynamicHTML(string filePath, SortedList<string,string> parametersList, string httpMethod)
         {
             FileInfo templateFile = new FileInfo(filePath);
-            string classNamePage = "Page" + templateFile.Name.Replace(templateFile.Extension, "");
+            string classNamePage = "HttpServerScratch." + "Page" + templateFile.Name.Replace(templateFile.Extension, "");
             
             //calling a class with a string in C#
             Type DynamicPageType = Type.GetType(classNamePage,true,true);
