@@ -210,42 +210,26 @@ namespace HttpServerScratch
             return fullPath;
         }
 
-        public byte[] GenerateDynamicHTML(string filePath, SortedList<string,string> parametersList)
+        public byte[] GenerateDynamicHTML(string filePath, SortedList<string,string> parametersList, string httpMethod)
         {
-
-            string templateKey = "{{HtmlGenerated}}";
-            string htmlModel = File.ReadAllText(filePath);
-            StringBuilder newHtml = new StringBuilder();
-            /*
-            newHtml.Append("<ul>");
-
-            foreach (string type in this.MimeTypes.Keys)
-            {
-                newHtml.Append($"<li> Extension Files with: {type}</li>");
-            }
-           
-            newHtml.Append("</ul>");
-            */
-            if (parametersList.Count <= 0)
-            {
-                newHtml.Append("<p>No one Parameter has been pass</p>");
-
-            }
-            else
-            {
-                newHtml.Append("<ul>");
-
-                foreach (KeyValuePair<string, string> param in parametersList)
-                {
-                    newHtml.Append($"<li>{param.Key} = {param.Value}</li>");
-                }
-
-                newHtml.Append("</ul>");
-            }
-
-            string finalHtml = htmlModel.Replace(templateKey, newHtml.ToString());
+            FileInfo templateFile = new FileInfo(filePath);
+            string classNamePage = "Page" + templateFile.Name.Replace(templateFile.Extension, "");
             
-            return Encoding.UTF8.GetBytes(finalHtml);
+            //calling a class with a string in C#
+            Type DynamicPageType = Type.GetType(classNamePage,true,true);
+            //converting the Ype object to DynamicPage object
+            DynamicPage DLpage = Activator.CreateInstance(DynamicPageType) as DynamicPage;
+            DLpage.HtmlTemplate = File.ReadAllText(filePath);
+
+            switch (httpMethod.ToLower())
+            {
+                case "get":
+                    return DLpage.Get(parametersList);
+                case "post":
+                    return DLpage.Post(parametersList);
+                default:
+                    return new byte[0];
+            }
         }
 
         private SortedList<string,string> ParametersProcessing(string parametersUrl)
